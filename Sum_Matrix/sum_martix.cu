@@ -21,12 +21,45 @@ void sumMatrix2DonCPU(float * MatA,float * MatB,float * MatC,int nx,int ny)
     }
 }
 
+void sumMatrix2DonCPU2(float * MatA,float * MatB,float * MatC,int nx,int ny)
+{
+    float* a = MatA;
+    float* b = MatB;
+    float* c = MatC;
+
+    /* 1 */
+    int idx = 0;
+    for(int j=0; j<ny; j++)
+    {
+        for(int i=0; i<nx; i++)
+        {
+            c[idx] = a[idx]+b[idx];
+            idx++;
+        }
+    }
+
+    /* 2 */
+    // for(int j=0; j<ny; j++)
+    // {
+    //     for(int i=0; i<nx; i++)
+    //     {
+    //         int idx = i+j*nx;
+    //         c[idx] = a[idx]+b[idx];
+    //     }
+    // }
+
+    /* 3 */
+    // for (int i=0; i<nx*ny; i++) {
+    //     c[i] = a[i]+b[i];
+    // }
+}
+
 //核函数，每一个线程计算矩阵中的一个元素。
 __global__ void sumMatrix(float * MatA,float * MatB,float * MatC,int nx,int ny)
 {
     int ix=threadIdx.x+blockDim.x*blockIdx.x;
     int iy=threadIdx.y+blockDim.y*blockIdx.y;
-    int idx=ix+iy*ny;
+    int idx=ix+iy*nx;
     if (ix<nx && iy<ny)
     {
         MatC[idx] = MatA[idx]+MatB[idx];
@@ -79,7 +112,7 @@ int main(int argc,char** argv)
     printf("GPU Execution Time: %f sec\n", gpuTime);
 
     //在CPU上完成相同的任务
-    cudaMemcpy(C_from_gpu, C_dev, nBytes, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(C_from_gpu, C_dev, nBytes, cudaMemcpyDeviceToHost);
     double cpuStart=cpuSecond();
     sumMatrix2DonCPU(A_host, B_host, C_host, nx, ny);
     double cpuTime = cpuSecond() - cpuStart;
