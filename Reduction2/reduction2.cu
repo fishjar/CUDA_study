@@ -63,6 +63,8 @@ __global__ void reduceNeighboredLess(int * g_idata,int *g_odata,unsigned int n)
 	//in-place reduction in global memory
 	for (int stride = 1; stride < blockDim.x; stride *= 2)
 	{
+		// 在每个线程块有1024个线程（32个线程束）时，
+		// 在第一轮迭代，前16个线程束执行计算，后16个线程束提前结束，不做计算；
 		//convert tid into local array index
 		int index = 2 * stride *tid;
 		if (index < blockDim.x)
@@ -85,6 +87,7 @@ __global__ void reduceInterleaved(int * g_idata, int *g_odata, unsigned int n)
 	if (idx >= n)
 		return;
 	//in-place reduction in global memory
+	// stride 从大到小
 	for (int stride = blockDim.x/2; stride >0; stride >>=1)
 	{
 		

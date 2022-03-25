@@ -13,6 +13,7 @@ int recursiveReduce(int *data, int const size)
 		{
 			data[i] += data[i + stride];
 		}
+		// 奇数的情况，把最后一个数加到第一个位置
 		data[0] += data[size - 1];
 	}
 	else
@@ -33,17 +34,22 @@ __global__ void reduceNeighbored(int * g_idata,int * g_odata,unsigned int n)
 	//set thread ID
 	unsigned int tid = threadIdx.x;
 	//boundary check
-	if (tid >= n) return;
+	unsigned idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx >= n) return;
 	//convert global data pointer to the 
 	int *idata = g_idata + blockIdx.x*blockDim.x;
 	//in-place reduction in global memory
+	// 这里好像只考虑了 blocksize 为 2^n 的情况
 	for (int stride = 1; stride < blockDim.x; stride *= 2)
 	{
+		// 步长是1,则每2个位置计算一次
+		// 步长是2,则每4个位置计算一次
 		if ((tid % (2 * stride)) == 0)
 		{
 			idata[tid] += idata[tid + stride];
 		}
 		//synchronize within block
+		// 实际是同步 block 内的 warp, warp 内的 thread 是本来就同步的
 		__syncthreads();
 	}
 	//write result for this block to global mem
