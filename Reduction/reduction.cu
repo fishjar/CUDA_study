@@ -68,7 +68,7 @@ int main(int argc,char** argv)
 		blocksize = atoi(argv[1]);   //从命令行输入设置block大小
 	}
 	dim3 block(blocksize, 1);
-	dim3 grid((size - 1) / block.x + 1, 1);
+	dim3 grid((size - 1) / block.x + 1, 1); // 通过blocksize计算gridsize，向上取整
 	printf("grid %d block %d \n", grid.x, block.x);
 
 	//allocate host memory
@@ -88,12 +88,13 @@ int main(int argc,char** argv)
 	int * idata_dev = NULL;
 	int * odata_dev = NULL;
 	CHECK(cudaMalloc((void**)&idata_dev, bytes));
-	CHECK(cudaMalloc((void**)&odata_dev, grid.x * sizeof(int)));
+	CHECK(cudaMalloc((void**)&odata_dev, grid.x * sizeof(int))); // odata_dev的长度是block的数量
 
 	//cpu reduction 对照组
 	int cpu_sum = 0;
 	timeStart = cpuSecond();
-	//cpu_sum = recursiveReduce(tmp, size);
+	// 递归算法
+	// cpu_sum = recursiveReduce(tmp, size);
 	for (int i = 0; i < size; i++)
 		cpu_sum += tmp[i];
 	timeElaps = 1000*(cpuSecond() - timeStart);
@@ -105,6 +106,8 @@ int main(int argc,char** argv)
 	//kernel reduceNeighbored
 
 	CHECK(cudaMemcpy(idata_dev, idata_host, bytes, cudaMemcpyHostToDevice));
+	// cudaDeviceSynchronize() ：该方法将停止CPU端线程的执行，直到GPU端完成之前CUDA的任务，
+	// 包括kernel函数、数据拷贝等。
 	CHECK(cudaDeviceSynchronize());
 	timeStart = cpuSecond();
 	reduceNeighbored <<<grid, block >>>(idata_dev, odata_dev, size);
