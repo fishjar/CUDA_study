@@ -2,3 +2,6 @@ sum_martix
 reduction
 reduction2
 reduction3
+
+*.ptx
+*.fatbin
