@@ -5,3 +5,4 @@ reduction3
 
 *.ptx
 *.fatbin
+*.out
