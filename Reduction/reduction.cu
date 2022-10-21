@@ -9,6 +9,9 @@ int recursiveReduce(int *data, int const size)
 	int const stride = size / 2;
 	if (size % 2 == 1)
 	{
+		// 计算方式，切开后前后两段一一对应相加
+		// 0 1 2 3
+		// 4 5 6 7
 		for (int i = 0; i < stride; i++)
 		{
 			data[i] += data[i + stride];
@@ -32,14 +35,25 @@ int recursiveReduce(int *data, int const size)
 __global__ void reduceNeighbored(int * g_idata,int * g_odata,unsigned int n) 
 {
 	//set thread ID
+	// tid 是当前block的线程序号
 	unsigned int tid = threadIdx.x;
 	//boundary check
 	unsigned idx = blockIdx.x*blockDim.x + threadIdx.x;
 	if (idx >= n) return;
 	//convert global data pointer to the 
+	// idata 为指向当前block的数组的第一个值的指针
 	int *idata = g_idata + blockIdx.x*blockDim.x;
 	//in-place reduction in global memory
 	// 这里好像只考虑了 blocksize 为 2^n 的情况
+	// 计算步骤（数据和线程序号一一对应）
+	// 0 1 2 3 4 5 6 7
+	// | | | | | | | |
+	// --- --- --- ---
+	// |   |   |   |
+	// -----   -----
+	// |       |
+	// ---------
+	// |
 	for (int stride = 1; stride < blockDim.x; stride *= 2)
 	{
 		// 步长是1,则每2个位置计算一次
@@ -53,6 +67,8 @@ __global__ void reduceNeighbored(int * g_idata,int * g_odata,unsigned int n)
 		__syncthreads();
 	}
 	//write result for this block to global mem
+	// 最终结果是当前block所有数之和，存入结果数组
+	// 结果数组g_odata的长度为block的数量
 	if (tid == 0)
 		g_odata[blockIdx.x] = idata[0];
 
@@ -78,25 +94,22 @@ int main(int argc,char** argv)
 	printf("grid %d block %d \n", grid.x, block.x);
 
 	//allocate host memory
+	// 分配内存
 	size_t bytes = size * sizeof(int);
 	int *idata_host = (int*)malloc(bytes);
 	int *odata_host = (int*)malloc(grid.x * sizeof(int));
 	int * tmp = (int*)malloc(bytes);
 
 	//initialize the array
+	// 初始化随机数组
 	initialData_int(idata_host, size);
 
+	// 拷贝tmp给cpu计算用
 	memcpy(tmp, idata_host, bytes);
 	double timeStart, timeElaps;
 	int gpu_sum = 0;
 
-	// device memory
-	int * idata_dev = NULL;
-	int * odata_dev = NULL;
-	CHECK(cudaMalloc((void**)&idata_dev, bytes));
-	CHECK(cudaMalloc((void**)&odata_dev, grid.x * sizeof(int))); // odata_dev的长度是block的数量
-
-	//cpu reduction 对照组
+	//--------------cpu reduction 对照组
 	int cpu_sum = 0;
 	timeStart = cpuSecond();
 	// 递归算法
@@ -109,16 +122,26 @@ int main(int argc,char** argv)
 	printf("cpu reduction elapsed %lf ms cpu_sum: %d\n", timeElaps, cpu_sum);
 
 
-	//kernel reduceNeighbored
+	//-------------kernel reduceNeighbored
+	// device memory
+	// 分配显存
+	int * idata_dev = NULL;
+	int * odata_dev = NULL;
+	CHECK(cudaMalloc((void**)&idata_dev, bytes));
+	CHECK(cudaMalloc((void**)&odata_dev, grid.x * sizeof(int))); // odata_dev的长度是block的数量
 
+	// 从内存拷贝数据到显存
 	CHECK(cudaMemcpy(idata_dev, idata_host, bytes, cudaMemcpyHostToDevice));
 	// cudaDeviceSynchronize() ：该方法将停止CPU端线程的执行，直到GPU端完成之前CUDA的任务，
 	// 包括kernel函数、数据拷贝等。
 	CHECK(cudaDeviceSynchronize());
 	timeStart = cpuSecond();
+	// 执行GPU计算
 	reduceNeighbored <<<grid, block >>>(idata_dev, odata_dev, size);
 	cudaDeviceSynchronize();
+	// 从显存拷贝数据到内存
 	cudaMemcpy(odata_host, odata_dev, grid.x * sizeof(int), cudaMemcpyDeviceToHost);
+	// 显卡计算完毕后，结果是一个长度为block数量的数组，仍要进行一次求和才得到最终结果
 	gpu_sum = 0;
 	for (int i = 0; i < grid.x; i++)
 		gpu_sum += odata_host[i];	
@@ -129,7 +152,7 @@ int main(int argc,char** argv)
 		timeElaps, grid.x, block.x);
     
 	// free host memory
-
+	// 释放内存和显存
 	free(idata_host);
 	free(odata_host);
 	CHECK(cudaFree(idata_dev));

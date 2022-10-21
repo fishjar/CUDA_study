@@ -108,11 +108,11 @@ __global__ void reduceUnroll2(int * g_idata,int * g_odata,unsigned int n)
 	//boundary check
 	if (idx >= n) return;
 	//convert global data pointer to the
-	// 将block数据的指针插入到2倍的blocksize长度
-	// 即将数据分段，每段包含thread数量的2倍
+	// 将总数据分段，每段包含2个block的数量，总段数变少
+	// idata指向相应block的头部
 	int *idata = g_idata + blockIdx.x*blockDim.x*2;
 	//这一句是核心，添加来自相邻数据块的值。
-	if(idx+blockDim.x<n) // 这个判断？？
+	if(idx+blockDim.x<n) // 这个判断是必须的，防止序号超出数组长度
 	{
 		// 手工执行一次加法
 		// 将相邻数据块的同位置tid相加
@@ -243,6 +243,7 @@ __global__ void reduceUnrollWarp8(int * g_idata,int * g_odata,unsigned int n)
 	//write result for this block to global mem
 	// 当执行到最后几次迭代时，当只需要32个或更少线程时，每次迭代后还需要进行线程束同步。
 	// 为了加速，我们可以把这最后6次迭代进行展开，
+	// 32个线程在一个warp中，每个warp指令是同步执行的，因此少于32时不需要额外同步
 	if(tid<32)
 	{
 		volatile int *vmem = idata;

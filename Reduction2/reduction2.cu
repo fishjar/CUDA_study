@@ -61,11 +61,33 @@ __global__ void reduceNeighboredLess(int * g_idata,int *g_odata,unsigned int n)
 	if (idx > n)
 		return;
 	//in-place reduction in global memory
+	// stride 依次 1,2,4,8...
 	for (int stride = 1; stride < blockDim.x; stride *= 2)
 	{
 		// 在每个线程块有1024个线程（32个线程束）时，
 		// 在第一轮迭代，前16个线程束执行计算，后16个线程束提前结束，不做计算；
 		//convert tid into local array index
+		// 数据还在原来的数组，但通过序号转换，计算的线程序号和数组序号不一一对应
+		// 计算线程集中在前面的线程，后面的提前结束
+		// 计算步骤（解决线程束发散）
+		// 数据
+		// 0 1 2 3 4 5 6 7
+		// | | | | | | | |
+		// --- --- --- ---
+		// |   |   |   |
+		// -----   -----
+		// |       |
+		// ---------
+		// |
+		// 线程
+		// 0 1 2 3 4 5 6 7
+		// | | | | | | | |
+		// --- --- --- ---
+		// | | | |
+		// --- ---
+		// | |
+		// ---
+		// |
 		int index = 2 * stride *tid;
 		if (index < blockDim.x)
 		{
@@ -87,10 +109,18 @@ __global__ void reduceInterleaved(int * g_idata, int *g_odata, unsigned int n)
 	if (idx >= n)
 		return;
 	//in-place reduction in global memory
-	// stride 从大到小
+	// stride 从大到小（解决数据读取不连续）
 	for (int stride = blockDim.x/2; stride >0; stride >>=1)
 	{
-		
+		// 计算步骤（数据和线程都集中到前面）
+		// 0 1 2 3 4 5 6 7
+		// | | | | | | | |
+		// --- --- --- ---
+		// | | | |
+		// --- ---
+		// | |
+		// ---
+		// |
 		if (tid <stride)
 		{
 			idata[tid] += idata[tid + stride];
